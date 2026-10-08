@@ -15,6 +15,7 @@ import type { IGameStoreSnapshot } from "@/types/IGameStore";
 import type { IState } from "@/types/IState";
 import type { ITool } from "@/types/ITool";
 import { GoGLauncher } from "@/util/GOGLauncher";
+import { createHeroicStores } from "@/util/linux/HeroicStore";
 import { OriginLauncher } from "@/util/OriginStore";
 import { getSafe } from "@/util/storeHelper";
 import { UPlayLauncher } from "@/util/UplayStore";
@@ -82,6 +83,8 @@ class GameModeManager {
       OriginLauncher.create(),
       UPlayLauncher.create(),
       XboxLauncher.create(api),
+      // Epic and GOG games installed through Heroic Games Launcher on Linux
+      ...createHeroicStores(),
     ].filter(Boolean);
     this.mActiveSearch = null;
     this.mQuickDiscoveryAbort = null;

@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { heroicUserPath } from "./heroic";
+
 /**
  * Per-user Windows folders a game reads inside its Proton prefix.
  * "documents" holds "My Games", "localAppData" holds plugins.txt.
@@ -80,9 +82,9 @@ export function compatDataPathForGame(gamePath: string, appId?: string): string 
  * The path a Steam game running under Proton sees as one of the user's
  * Windows folders, e.g. `.../compatdata/377160/pfx/drive_c/users/steamuser/Documents`.
  *
- * Returns undefined on anything but Linux, when the game isn't installed in a
- * Steam library, or when it has no Proton prefix (yet), so callers can fall
- * back to the native folder.
+ * Steam games use their compatdata prefix, Epic/GOG games installed through
+ * Heroic use Heroic's prefix. Returns undefined on anything but Linux or when
+ * the game has no prefix (yet), so callers can fall back to the native folder.
  */
 export function protonUserFolder(
   gamePath: string | undefined,
@@ -93,11 +95,16 @@ export function protonUserFolder(
     return undefined;
   }
   const compatDataPath = compatDataPathForGame(gamePath, appId);
-  if (compatDataPath === undefined) {
-    return undefined;
-  }
-  const userPath = path.join(compatDataPath, "pfx", "drive_c", "users", "steamuser");
-  if (!fs.existsSync(userPath)) {
+  const steamUserPath =
+    compatDataPath === undefined
+      ? undefined
+      : path.join(compatDataPath, "pfx", "drive_c", "users", "steamuser");
+  // Epic and GOG games installed through Heroic live in Heroic's prefixes
+  const userPath =
+    steamUserPath !== undefined && fs.existsSync(steamUserPath)
+      ? steamUserPath
+      : heroicUserPath(gamePath);
+  if (userPath === undefined) {
     return undefined;
   }
   return path.join(userPath, ...USER_FOLDERS[folder]);

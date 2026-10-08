@@ -53,6 +53,16 @@ Done and checked against the real FO4 install:
 - Releases: a `linux-v*` tag publishes a full "latest" release with the
   AppImage; pushes to master refresh the `linux-nightly` pre-release.
 
+- Epic and GOG through Heroic Games Launcher (`util/linux/heroic.ts`,
+  `util/linux/HeroicStore.ts`): on Linux, Heroic's installed lists (native and
+  Flatpak) back Vortex's `epic` and `gog` stores, so game extensions find games
+  by their existing Epic/GOG ids. Games launch via `heroic://launch`; user
+  folders (My Games, plugins.txt) resolve into Heroic's prefix; Windows tools run
+  with the game's Heroic Wine/Proton, falling back to an installed Proton when
+  the configured one was removed. Unit tested and read against a real Heroic
+  install; no moddable Heroic game was available to test end to end.
+  Not covered yet: Lutris, Bottles, Amazon (nile), Xbox/EA/Ubisoft.
+
 Verified end to end on CachyOS: discovery, login, nxm links, mod install,
 hardlink deploy across drives, F4SE 0.7.9 through Proton, MCM, Commonwealth
 Online connecting to a local server.

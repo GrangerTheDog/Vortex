@@ -24,7 +24,9 @@ import {
 } from "./CustomErrors";
 import { emitGameLaunched, recordLaunchExit } from "./gameLaunchAnalytics";
 import getVortexPath from "./getVortexPath";
+import { heroicToolCommand } from "./linux/heroic";
 import { isWindowsExecutable } from "./linux/proton";
+import { findLinuxSteamPath } from "./linux/steamPaths";
 import type { Steam, ISteamEntry } from "./Steam";
 import { getSafe } from "./storeHelper";
 import * as storeLookup from "./storeLookup";
@@ -291,6 +293,32 @@ class StarterInfo implements IStarterInfo {
         },
         protonGameEntry,
       );
+    }
+
+    // Epic/GOG games installed through Heroic: run Windows tools in the game's
+    // Heroic prefix with the Wine/Proton Heroic uses for it
+    const heroicCommand =
+      process.platform === "linux" &&
+      ["epic", "gog"].includes(info.store) &&
+      isWindowsExecutable(info.exePath)
+        ? heroicToolCommand(info.exePath, info.commandLine, info.environment, findLinuxSteamPath())
+        : undefined;
+    if (heroicCommand !== undefined) {
+      return api.runExecutable(heroicCommand.executable, heroicCommand.args, {
+        cwd: info.workingDirectory || path.dirname(info.exePath),
+        env: heroicCommand.env,
+        suggestDeploy: true,
+        shell: false,
+        detach: info.detach || info.onStart === "close",
+        // like Proton above, the process exit can't be tracked through the wrapper
+        onSpawned: () => {
+          if (["hide", "hide_recover"].includes(info.onStart)) {
+            void hideWindow();
+          } else if (info.onStart === "close") {
+            getApplication().quit();
+          }
+        },
+      });
     }
 
     return api
