@@ -55,9 +55,7 @@ function ensureIniBackups(
 function genIniFormat(format: string) {
   switch (format) {
     case "winapi":
-      if (process.platform !== "win32") {
-        return undefined;
-      }
+      // vortex-parse-ini is patched to implement this format without the Windows API elsewhere
       return new WinapiFormat();
     default:
       throw new Error("unsupported ini format: " + format);

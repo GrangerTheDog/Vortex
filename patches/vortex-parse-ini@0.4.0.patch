@@ -1,0 +1,202 @@
+diff --git a/lib/WinapiFormat.js b/lib/WinapiFormat.js
+index 25b588df4f35be4294cd4fe230590331028576cd..310c56662774f2b609e9f4fe12f35a6cca2a96ca 100644
+--- a/lib/WinapiFormat.js
++++ b/lib/WinapiFormat.js
+@@ -1,6 +1,149 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+-const winapi = require("winapi-bindings");
++const fs = require("fs");
++// The Windows profile API only exists on Windows. Elsewhere (Linux, where the
++// games run under Proton) the same semantics are implemented on the file text.
++const winapi = process.platform === "win32" ? require("winapi-bindings") : undefined;
++
++const UTF16_BOM = "﻿";
++
++// The INIs are ANSI; latin1 maps every byte to one char, so untouched bytes
++// survive a read/write round trip unchanged.
++function readProfile(filePath) {
++    let raw;
++    try {
++        raw = fs.readFileSync(filePath);
++    }
++    catch (err) {
++        if (err.code === "ENOENT") {
++            return { encoding: "latin1", eol: "\r\n", lines: [] };
++        }
++        throw err;
++    }
++    const utf16 = raw.length >= 2 && raw[0] === 0xff && raw[1] === 0xfe;
++    const encoding = utf16 ? "utf16le" : "latin1";
++    let text = raw.toString(encoding);
++    if (utf16 && text.startsWith(UTF16_BOM)) {
++        text = text.slice(1);
++    }
++    const eol = text.includes("\r\n") || !text.includes("\n") ? "\r\n" : "\n";
++    const lines = text.length === 0 ? [] : text.split(/\r?\n/);
++    // a trailing newline leaves an empty last element; it's re-added on write
++    if (lines.length > 0 && lines[lines.length - 1] === "") {
++        lines.pop();
++    }
++    return { encoding, eol, lines, utf16 };
++}
++
++function writeProfile(filePath, profile) {
++    const text = profile.lines.join(profile.eol) + profile.eol;
++    fs.writeFileSync(filePath, profile.utf16 ? UTF16_BOM + text : text, profile.encoding);
++}
++
++function sectionName(line) {
++    const match = /^\s*\[([^\]]*)\]/.exec(line);
++    return match === null ? undefined : match[1].trim();
++}
++
++function keyOf(line) {
++    const trimmed = line.trim();
++    if (trimmed.startsWith(";") || trimmed.startsWith("#")) {
++        return undefined;
++    }
++    const eq = trimmed.indexOf("=");
++    return eq === -1 ? undefined : trimmed.slice(0, eq).trim();
++}
++
++/** [start, end) line range of a section's body, matched case-insensitively like Windows. */
++function findSection(lines, section) {
++    const wanted = section.toLowerCase();
++    for (let i = 0; i < lines.length; ++i) {
++        const name = sectionName(lines[i]);
++        if (name !== undefined && name.toLowerCase() === wanted) {
++            let end = i + 1;
++            while (end < lines.length && sectionName(lines[end]) === undefined) {
++                ++end;
++            }
++            return { header: i, start: i + 1, end };
++        }
++    }
++    return undefined;
++}
++
++function findKey(lines, range, key) {
++    const wanted = key.toLowerCase();
++    for (let i = range.start; i < range.end; ++i) {
++        const name = keyOf(lines[i]);
++        if (name !== undefined && name.toLowerCase() === wanted) {
++            return i;
++        }
++    }
++    return -1;
++}
++
++function getSectionNames(filePath) {
++    const seen = new Set();
++    const names = [];
++    for (const line of readProfile(filePath).lines) {
++        const name = sectionName(line);
++        if (name !== undefined && !seen.has(name.toLowerCase())) {
++            seen.add(name.toLowerCase());
++            names.push(name);
++        }
++    }
++    return names;
++}
++
++function getSection(filePath, section) {
++    const { lines } = readProfile(filePath);
++    const range = findSection(lines, section);
++    const result = {};
++    if (range === undefined) {
++        return result;
++    }
++    for (let i = range.start; i < range.end; ++i) {
++        const key = keyOf(lines[i]);
++        if (key !== undefined) {
++            const line = lines[i].trim();
++            result[key] = line.slice(line.indexOf("=") + 1).trim();
++        }
++    }
++    return result;
++}
++
++function writeString(profile, section, key, value) {
++    const { lines } = profile;
++    let range = findSection(lines, section);
++    if (value === null || value === undefined) {
++        if (range !== undefined) {
++            const idx = findKey(lines, range, key);
++            if (idx !== -1) {
++                lines.splice(idx, 1);
++            }
++        }
++        return;
++    }
++    const entry = `${key}=${value}`;
++    if (range === undefined) {
++        if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
++            lines.push("");
++        }
++        lines.push(`[${section}]`, entry);
++        return;
++    }
++    const idx = findKey(lines, range, key);
++    if (idx !== -1) {
++        lines[idx] = entry;
++        return;
++    }
++    // insert after the section's last non-blank line, keeping blank separators
++    let insertAt = range.end;
++    while (insertAt > range.start && lines[insertAt - 1].trim() === "") {
++        --insertAt;
++    }
++    lines.splice(insertAt, 0, entry);
++}
++
+ class WinapiFormat {
+     constructor() {
+     }
+@@ -15,6 +158,20 @@ class WinapiFormat {
+     }
+     write(filePath, data, changes) {
+         try {
++            if (winapi === undefined) {
++                const profile = readProfile(filePath);
++                changes.removed.forEach((fullKey) => {
++                    const [section, key] = fullKey.split('###');
++                    writeString(profile, section, key, null);
++                });
++                [].concat(changes.added, changes.changed)
++                    .forEach((fullKey) => {
++                    const [section, key] = fullKey.split('###');
++                    writeString(profile, section, key, data[section][key]);
++                });
++                writeProfile(filePath, profile);
++                return Promise.resolve();
++            }
+             changes.removed.forEach((fullKey) => {
+                 const [section, key] = fullKey.split('###');
+                 winapi.WritePrivateProfileString(section, key, null, filePath);
+@@ -31,9 +188,25 @@ class WinapiFormat {
+         }
+     }
+     readSectionList(filePath) {
++        if (winapi === undefined) {
++            try {
++                return Promise.resolve(getSectionNames(filePath));
++            }
++            catch (err) {
++                return Promise.reject(err);
++            }
++        }
+         return Promise.resolve(winapi.GetPrivateProfileSectionNames(filePath));
+     }
+     readSection(filePath, section) {
++        if (winapi === undefined) {
++            try {
++                return Promise.resolve(getSection(filePath, section));
++            }
++            catch (err) {
++                return Promise.reject(err);
++            }
++        }
+         return Promise.resolve(winapi.GetPrivateProfileSection(section, filePath));
+     }
+ }
