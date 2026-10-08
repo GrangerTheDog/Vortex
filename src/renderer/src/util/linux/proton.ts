@@ -50,7 +50,8 @@ export async function getConfiguredProtonName(
     const configData = await fs.readFileAsync(configPath, "utf8");
     const config = parse(configData.toString()) as any;
     const mapping = config?.InstallConfigStore?.Software?.Valve?.Steam?.CompatToolMapping;
-    return mapping?.[appId]?.name;
+    // "0" holds the default Steam applies to games without their own setting
+    return mapping?.[appId]?.name || mapping?.["0"]?.name || undefined;
   } catch (err: any) {
     log("debug", "Could not read Steam config.vdf", { error: err?.message });
     return undefined;
@@ -106,6 +107,84 @@ function folderMatchesKeyword(folderName: string, keyword: string): boolean {
 }
 
 /**
+ * Folders Steam loads custom compatibility tools from: the client's own, the
+ * system-wide ones distro packages install into (CachyOS's proton-cachyos, AUR
+ * proton-ge-custom, ...) and any listed in STEAM_EXTRA_COMPAT_TOOLS_PATHS.
+ */
+export function compatToolDirs(steamPath: string): string[] {
+  const extra = (process.env.STEAM_EXTRA_COMPAT_TOOLS_PATHS ?? "")
+    .split(":")
+    .filter((dir) => dir.length > 0);
+  return [
+    path.join(steamPath, "compatibilitytools.d"),
+    ...extra,
+    "/usr/share/steam/compatibilitytools.d",
+    "/usr/local/share/steam/compatibilitytools.d",
+  ];
+}
+
+/**
+ * Tools a compatibilitytool.vdf manifest registers, as internal name to install
+ * path. Steam keys CompatToolMapping by that internal name, which doesn't have
+ * to match the folder name.
+ */
+export function parseCompatToolManifest(
+  data: string,
+  manifestDir: string,
+): Array<{ name: string; installPath: string }> {
+  // the manifests carry // comments, which the vdf parser doesn't understand
+  const withoutComments = data.replace(/\/\/[^\n]*/g, "");
+  let tools: Record<string, { install_path?: string }> | undefined;
+  try {
+    tools = (parse(withoutComments) as any)?.compatibilitytools?.compat_tools;
+  } catch {
+    return [];
+  }
+  return Object.entries(tools ?? {}).map(([name, tool]) => ({
+    name,
+    installPath: path.resolve(manifestDir, tool?.install_path ?? "."),
+  }));
+}
+
+/** Whether a folder holds a usable Proton build, i.e. has the `proton` launcher script. */
+async function hasProtonScript(dir: string): Promise<boolean> {
+  return pathExists(path.join(dir, "proton"));
+}
+
+async function findCompatTool(steamPath: string, protonName: string): Promise<string | undefined> {
+  for (const toolDir of compatToolDirs(steamPath)) {
+    let entries: string[];
+    try {
+      entries = await fs.readdirAsync(toolDir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const manifestDir = path.join(toolDir, entry);
+      let data: string;
+      try {
+        data = (
+          await fs.readFileAsync(path.join(manifestDir, "compatibilitytool.vdf"), "utf8")
+        ).toString();
+      } catch {
+        // no manifest; Steam then registers the folder under its own name
+        if (entry === protonName && (await hasProtonScript(manifestDir))) {
+          return manifestDir;
+        }
+        continue;
+      }
+      const tool = parseCompatToolManifest(data, manifestDir).find(
+        (candidate) => candidate.name === protonName,
+      );
+      if (tool !== undefined && (await hasProtonScript(tool.installPath))) {
+        return tool.installPath;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
  * Resolve a Proton config name to its installation path.
  *
  * Steam stores the configured Proton version in config.vdf using internal names
@@ -116,14 +195,17 @@ function folderMatchesKeyword(folderName: string, keyword: string): boolean {
  *   - config.vdf: "GE-Proton10-28"      -> folder: "GE-Proton10-28" (exact match)
  *
  * Steam provides no direct mapping between these names. Custom tools (GE-Proton, etc.)
- * use matching names, but official Proton versions do not.
+ * declare theirs in compatibilitytool.vdf, but official Proton versions do not.
  *
  * Resolution strategy (no hardcoded mappings):
- * 1. Custom tools: Check compatibilitytools.d/{name} - custom Proton builds
- *    use their config name as the folder name directly.
+ * 1. Custom tools: match the name a compatibilitytool.vdf declares, in Steam's
+ *    own and the system-wide compatibilitytools.d folders.
  * 2. Exact match: Check steamapps/common/{name} - in case config name matches.
  * 3. Fuzzy match: Scan steamapps/common/Proton* folders and match by keyword.
  *    Extract the keyword after "proton_" and find a folder containing it.
+ *
+ * Only folders containing a `proton` script count; Steam also installs runtimes
+ * like "Proton EasyAntiCheat Runtime" under steamapps/common.
  *
  * This approach is self-maintaining and doesn't require updates when Valve
  * releases new Proton versions.
@@ -132,10 +214,9 @@ export async function resolveProtonPath(
   steamPath: string,
   protonName: string,
 ): Promise<string | undefined> {
-  // 1. Check custom compatibility tools directory (GE-Proton, etc.)
-  // Custom tools use their config name as the folder name directly
-  const customToolPath = path.join(steamPath, "compatibilitytools.d", protonName);
-  if (await pathExists(customToolPath)) {
+  // 1. Custom compatibility tools (GE-Proton, proton-cachyos, etc.)
+  const customToolPath = await findCompatTool(steamPath, protonName);
+  if (customToolPath !== undefined) {
     return customToolPath;
   }
 
@@ -143,7 +224,7 @@ export async function resolveProtonPath(
 
   // 2. Check for exact match in steamapps/common
   const exactPath = path.join(commonPath, protonName);
-  if (await pathExists(exactPath)) {
+  if (await hasProtonScript(exactPath)) {
     return exactPath;
   }
 
@@ -155,7 +236,10 @@ export async function resolveProtonPath(
       const protonDirs = entries.filter((e) => e.toLowerCase().startsWith("proton"));
 
       for (const dir of protonDirs) {
-        if (folderMatchesKeyword(dir, keyword)) {
+        if (
+          folderMatchesKeyword(dir, keyword) &&
+          (await hasProtonScript(path.join(commonPath, dir)))
+        ) {
           return path.join(commonPath, dir);
         }
       }
@@ -176,10 +260,15 @@ export async function findLatestProton(steamPath: string): Promise<string | unde
   const commonPath = path.join(steamPath, "steamapps", "common");
   try {
     const entries = await fs.readdirAsync(commonPath);
-    const protonDirs = entries
-      .filter((e) => e.toLowerCase().startsWith("proton"))
-      .sort()
-      .reverse();
+    const candidates = entries.filter((e) => e.toLowerCase().startsWith("proton"));
+    const protonDirs: string[] = [];
+    for (const dir of candidates) {
+      if (await hasProtonScript(path.join(commonPath, dir))) {
+        protonDirs.push(dir);
+      }
+    }
+    // numeric, so "Proton 10.0" ranks above "Proton 9.0"
+    protonDirs.sort((lhs, rhs) => rhs.localeCompare(lhs, undefined, { numeric: true }));
 
     if (protonDirs.length > 0) {
       return path.join(commonPath, protonDirs[0]);

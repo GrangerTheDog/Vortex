@@ -228,11 +228,14 @@ async function checkNetInstall(api: IExtensionApi, dotnetVersion: number): Promi
   if (process.platform === "linux") {
     return {
       description: {
-        short: `Microsoft .NET Desktop Runtime ${dotnetVersion} required`,
+        short: `Microsoft .NET Runtime ${dotnetVersion} required`,
         long:
-          `Vortex requires .NET Desktop Runtime ${dotnetVersion} to be installed to run FOMOD mod installers.` +
+          `Vortex requires the .NET Runtime ${dotnetVersion} to be installed to run FOMOD mod installers.` +
           "[br][/br][br][/br]" +
-          `If you already have .NET Desktop Runtime ${dotnetVersion} installed then there may be a problem with your installation and a reinstall might be needed.` +
+          "Install it with your distribution's package manager, for example " +
+          `"dotnet-runtime-${dotnetVersion}.0" on Arch, Fedora and Ubuntu, then restart Vortex.` +
+          "[br][/br][br][/br]" +
+          `If you already have the .NET Runtime ${dotnetVersion} installed then there may be a problem with your installation and a reinstall might be needed.` +
           "[br][/br][br][/br]" +
           '[spoiler label="Show detailed error"]{{stderr}}[/spoiler]',
         replace: { stderr: stderr.replace(/\n/g, "[br][/br]") },

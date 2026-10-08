@@ -1,3 +1,12 @@
+> [!NOTE]
+> **This is a Linux-focused fork of Vortex.** Its changes were made with
+> [Claude](https://claude.com/claude-code), Anthropic's AI coding assistant, to fix
+> the parts of Vortex that only worked on Windows and make it run on Linux. The
+> first target is Steam games under Proton, starting with Fallout 4: game files in
+> the Proton prefix, hardlink deployment across drives, and an AppImage build.
+> It's a work in progress and isn't an official Nexus Mods release. See
+> [LINUX_HANDOFF.md](LINUX_HANDOFF.md) for what's done and what's still open.
+
 <p align="center">
   <img src=".github/assets/github_readme_title.png" alt="Vortex Mod Manager title banner"/>
 </p>

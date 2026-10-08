@@ -14,6 +14,12 @@ vi.mock("winapi-bindings", () => ({
   GetProcessList: () => [],
 }));
 
+const running = vi.hoisted(() => ({ processes: [] as Array<{ name: string }> }));
+
+vi.mock("../extensions/gamemode_management/util/processProvider", () => ({
+  defaultProcessProvider: { list: () => Promise.resolve(running.processes) },
+}));
+
 const entry = (gameStoreId: string, appid: string, name: string): IGameStoreEntry => ({
   appid,
   gamePath: `C:\\Games\\${appid}`,
@@ -211,6 +217,31 @@ describe("storeLookup.launchGameStore", () => {
       suggestDeploy: false,
     });
   });
+
+  it.skipIf(process.platform === "win32")(
+    "doesn't start a Linux store again when its binary runs without the script extension",
+    async () => {
+      const harness = makeApiHarness();
+      const api = harness.api;
+      const runExecutable = vi.fn().mockResolvedValue(undefined);
+      api.runExecutable = runExecutable;
+      const linuxStores = [
+        makeStore("steam", [], {
+          getGameStorePath: () => Promise.resolve("/home/user/.local/share/Steam/steam.sh"),
+        }),
+      ];
+      running.processes = [{ name: "steam" }];
+
+      try {
+        await storeLookup.launchGameStore(linuxStores, api, "steam");
+        await flush();
+      } finally {
+        running.processes = [];
+      }
+
+      expect(runExecutable).not.toHaveBeenCalled();
+    },
+  );
 
   it("reports a failing store launch chain via notification only", async () => {
     const harness = makeApiHarness();

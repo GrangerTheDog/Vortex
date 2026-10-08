@@ -1,6 +1,7 @@
+import { statfsSync } from "node:fs";
+
 import type { TFunction } from "i18next";
 import * as React from "react";
-import * as winapi from "winapi-bindings";
 
 import { setSettingsPage } from "../../actions/session";
 import Icon from "../../controls/Icon";
@@ -27,7 +28,8 @@ function minDiskSpace(required: number, key: string) {
       try {
         freeSpace[key] = {
           path: checkPath,
-          free: winapi.GetDiskFreeSpaceEx(checkPath).freeToCaller,
+          // free space available to this user, like GetDiskFreeSpaceEx's freeToCaller
+          free: (({ bavail, bsize }) => bavail * bsize)(statfsSync(checkPath)),
         };
       } catch (err) {
         return false;

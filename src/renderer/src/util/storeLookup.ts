@@ -10,6 +10,7 @@ import type { IGameStore } from "@/types/IGameStore";
 import { GameEntryNotFound, GameStoreNotFound } from "@/types/IGameStore";
 import type { IGameStoreEntry } from "@/types/IGameStoreEntry";
 
+import { defaultProcessProvider } from "../extensions/gamemode_management/util/processProvider";
 import { ProcessCanceled } from "./CustomErrors";
 import * as fs from "./fs";
 import { defaultPriority, type IQueryArgEntry, normalizeStoreQuery } from "./storeQuery";
@@ -242,7 +243,7 @@ async function launchStoreAsync(
 
   try {
     const launcherPath = await gameStore.getGameStorePath();
-    if (!!launcherPath && !isStoreRunning(launcherPath)) {
+    if (!!launcherPath && !(await isStoreRunning(launcherPath))) {
       // TODO: Bluebird to native
       await Promise.resolve(
         api.runExecutable(launcherPath, parameters || [], {
@@ -256,13 +257,17 @@ async function launchStoreAsync(
   }
 }
 
-function isStoreRunning(storeExecPath: string) {
-  const runningProcesses = winapi.GetProcessList();
+async function isStoreRunning(storeExecPath: string): Promise<boolean> {
   const exeId = makeExeId(storeExecPath);
-  return (
-    runningProcesses.find((runningProc) => exeId === runningProc.exeFile.toLowerCase()) !==
-    undefined
-  );
+  if (process.platform === "win32") {
+    const runningProcesses = winapi.GetProcessList();
+    return runningProcesses.some((runningProc) => exeId === runningProc.exeFile.toLowerCase());
+  }
+  // Linux stores start through a wrapper script (Steam's steam.sh) that runs a
+  // binary of the same name without the extension
+  const names = [exeId, path.basename(exeId, path.extname(exeId))];
+  const runningProcesses = await defaultProcessProvider.list();
+  return runningProcesses.some((runningProc) => names.includes(runningProc.name.toLowerCase()));
 }
 
 function validInput(input: string | string[]): boolean {

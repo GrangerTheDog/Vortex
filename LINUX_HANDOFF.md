@@ -25,13 +25,31 @@ Done and checked against the real FO4 install:
 - AppImage: `linux.target` includes `AppImage`; `.github/workflows/package-linux.yml`
   builds it on ubuntu-22.04. Not yet run locally.
 
+- Finding 2 (Proton picking): `resolveProtonPath` also searches system-wide
+  `compatibilitytools.d` folders (`/usr/share/steam/...`, where CachyOS installs
+  proton-cachyos) and `STEAM_EXTRA_COMPAT_TOOLS_PATHS`, matching the name in
+  `compatibilitytool.vdf`. Games without their own setting use Steam's default
+  (mapping `"0"`). Only folders with a `proton` script count, and the fallback
+  sorts numerically.
+- `launchGameStore` no longer throws on Linux: `isStoreRunning` uses ps-list and
+  matches `steam.sh` against the running `steam` binary.
+- The dashboard's low-disk-space warning uses `fs.statfsSync` instead of the
+  Windows-only `GetDiskFreeSpaceEx`.
+- The .NET check on Linux names the distro package (`dotnet-runtime-9.0`).
+
+Checked and fine on Linux already:
+
+- Savegame parsing is pure JS now. The AUR `vortex-linux-fix` package's BA2/BSA
+  and GamebryoSave.node patches target the old v2.0.0 layout and are obsolete.
+- Download-finished shutdown uses `systemctl poweroff`.
+- Most game extensions only use `winapi.RegGetValue` as a fallback after the
+  Steam lookup.
+
 Open:
 
-- Gamebryo BA2/BSA support and savegame management are Windows-only builds
-  upstream. The AUR `vortex-linux-fix` package enables them and builds
-  `GamebryoSave.node` with lz4/zlib. Needed for full FO4 support.
 - Nexus login on Linux: being tested.
-- Findings 2-4 below.
+- F4SE / FO4Edit through Proton: needs a run on the real machine.
+- Findings 3-4 below.
 
 ## Goal and scope (decided by the user)
 
