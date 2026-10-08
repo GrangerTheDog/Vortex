@@ -5,7 +5,6 @@ import { getErrorCode, isErrorWithSystemCode, unknownToError } from "@vortex/sha
 import PromiseBB from "bluebird";
 import type { IEntry } from "turbowalk";
 import turbowalk from "turbowalk";
-import * as winapi from "winapi-bindings";
 
 import { DOWNLOADS_DIR_TAG } from "../extensions/download_management/util/downloadDirectory";
 import { STAGING_DIR_TAG } from "../extensions/mod_management/stagingDirectory";
@@ -14,7 +13,6 @@ import {
   InsufficientDiskSpace,
   NotFound,
   ProcessCanceled,
-  UnsupportedOperatingSystem,
   UserCanceled,
 } from "./CustomErrors";
 import * as fs from "./fs";
@@ -22,6 +20,7 @@ import type { Normalize } from "./getNormalizeFunc";
 import getNormalizeFunc from "./getNormalizeFunc";
 import { log } from "./log";
 import { isChildPath } from "./util";
+import { volumePathName } from "./volumePath";
 
 const MIN_DISK_SPACE_OFFSET = 512 * 1024 * 1024;
 
@@ -36,13 +35,9 @@ const MIN_DISK_SPACE_OFFSET = 512 * 1024 * 1024;
  * @param destination The proposed destination folder.
  */
 export function testPathTransfer(source: string, destination: string): PromiseBB<void> {
-  if (process.platform !== "win32") {
-    return PromiseBB.reject(new UnsupportedOperatingSystem());
-  }
-
   let destinationRoot: string;
   try {
-    destinationRoot = winapi.GetVolumePathName(destination);
+    destinationRoot = volumePathName(destination);
   } catch (err) {
     if (isErrorWithSystemCode(err)) {
       if (err.systemCode === 2) {

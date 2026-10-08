@@ -96,6 +96,10 @@ jobs:
 
       - name: Build AppImage
         run: pnpm -F @vortex/main run package:nosign
+        env:
+          # On CI, electron-builder hardlinks files into linux-unpacked; a file it
+          # visits twice (winapi.node) then fails with EEXIST instead of being overwritten
+          USE_HARD_LINKS: "false"
 
       - name: Validate package
         run: |
@@ -110,6 +114,24 @@ jobs:
           path: dist/vortex-*.AppImage
           if-no-files-found: error
           retention-days: 30
+
+      # Branch builds replace one rolling pre-release, so the newest AppImage is
+      # always at the same place without piling up releases.
+      - name: Publish Linux nightly pre-release
+        if: github.ref_type == 'branch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.raw }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          gh release delete linux-nightly --cleanup-tag --yes || true
+          gh release create linux-nightly dist/vortex-*.AppImage \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Linux nightly ($VERSION)" \
+            --notes "Unsigned Linux AppImage built from \`$BRANCH\` at $GITHUB_SHA. Replaced on every build.
+
+          Make it executable and run it: \`chmod +x vortex-*.AppImage && ./vortex-*.AppImage\`. AppImages need FUSE 2 (\`fuse2\` on Arch, \`libfuse2\` on Debian/Ubuntu)."
 
       - name: Attach to release
         if: github.ref_type == 'tag'
