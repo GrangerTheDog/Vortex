@@ -12,6 +12,24 @@
 > It's a work in progress and isn't an official Nexus Mods release. See
 > [LINUX_HANDOFF.md](LINUX_HANDOFF.md) for what's done and what's still open.
 
+### What's different from upstream Vortex
+
+Upstream Vortex builds on Linux, but much of it assumes Windows. These are the
+changes, and why each was needed:
+
+| Change                                                                                                                                                  | Why                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Game files (My Games INIs, `plugins.txt`, saves, script extender logs) are read from the game's **Proton/Wine prefix**                                  | Under Proton the game keeps them in `compatdata/<appid>/pfx/drive_c/users/steamuser`, not in your Linux home, so load order and INI changes never reached the game |
+| **INI files are edited without the Windows API** (patched `vortex-parse-ini`)                                                                           | Vortex skipped all INI changes on Linux, so archive invalidation and mod INI tweaks were missing (e.g. MCM showed `$MCM_...` text)                                 |
+| **File and folder case is unified** on deploy (`f4se/plugins` → `F4SE/Plugins`)                                                                         | Linux keeps both spellings as separate folders, but Windows games under Wine only read one, so some mods' files were ignored                                       |
+| `plugins.txt` reuses the game's own spelling (`Plugins.txt`)                                                                                            | Wine opens the game's capitalised file first and ignored the lowercase one Vortex wrote                                                                            |
+| Fallout 4: `bEnableFileSelection=1` is set while Vortex manages plugins                                                                                 | Without it the game loads no mod plugins and turns them back off (not Linux-specific)                                                                              |
+| The staging folder is suggested **on the game's drive**, and moving staging/download folders works                                                      | Hardlink deployment only works within one drive; the suggestion and the move relied on Windows-only calls                                                          |
+| **Proton builds** are found in system folders (`/usr/share/steam/compatibilitytools.d`, e.g. CachyOS's proton-cachyos) and Steam's default is respected | Tools like F4SE and xEdit must run in the same Proton as the game                                                                                                  |
+| **Epic and GOG games installed through Heroic** are detected, launched through Heroic and modded in Heroic's prefix                                     | Vortex's Epic and GOG support only worked with the Windows launchers                                                                                               |
+| Store detection, free disk space checks and the .NET hint work on Linux                                                                                 | They called Windows-only functions and failed or stayed silent                                                                                                     |
+| An **AppImage** is built by GitHub Actions and published as a release                                                                                   | Upstream only ships a Windows installer                                                                                                                            |
+
 <p align="center">
   <img src=".github/assets/github_readme_title.png" alt="Vortex Mod Manager title banner"/>
 </p>
