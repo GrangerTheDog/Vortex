@@ -1,8 +1,10 @@
 name: Package Linux
 
 # Builds an unsigned Linux AppImage. Every push to master and every manual run
-# uploads it as a workflow artifact; pushing a v* tag also attaches it to that
-# tag's GitHub release.
+# uploads it as a workflow artifact and refreshes the rolling "linux-nightly"
+# pre-release. Pushing a linux-v* tag (e.g. linux-v1.0.0) publishes a full
+# release marked as the repository's latest; a v* tag attaches the AppImage to
+# that tag's release.
 
 on:
   workflow_dispatch:
@@ -13,9 +15,8 @@ on:
         type: string
         default: ""
   push:
-    # TODO: drop the Linux work branch once it's merged
-    branches: [master, claude/determined-gates-klad6l]
-    tags: ["v*"]
+    branches: [master]
+    tags: ["v*", "linux-v*"]
     paths-ignore:
       - "**.md"
       - "docs/**"
@@ -43,7 +44,7 @@ jobs:
         run: |
           raw="$INPUT_VERSION"
           if [ -z "$raw" ] && [ "$REF_TYPE" = "tag" ]; then
-            raw="$REF_NAME"
+            raw="${REF_NAME#linux-}"
           fi
           if [ -z "$raw" ]; then
             base=$(node -p "require('./package.json').version")
@@ -133,8 +134,28 @@ jobs:
 
           Make it executable and run it: \`chmod +x vortex-*.AppImage && ./vortex-*.AppImage\`. AppImages need FUSE 2 (\`fuse2\` on Arch, \`libfuse2\` on Debian/Ubuntu)."
 
+      - name: Publish Linux release
+        if: github.ref_type == 'tag' && startsWith(github.ref_name, 'linux-v')
+        uses: softprops/action-gh-release@v3.0.3
+        with:
+          files: dist/vortex-*.AppImage
+          prerelease: false
+          make_latest: "true"
+          name: Vortex for Linux ${{ steps.version.outputs.raw }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            Linux build of this Vortex fork: Steam games under Proton, starting with Fallout 4.
+            See [LINUX_HANDOFF.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/LINUX_HANDOFF.md) for what works and what's still open.
+
+            **Install:** download `vortex-*.AppImage` below, then run
+            `chmod +x vortex-*.AppImage && ./vortex-*.AppImage`.
+            AppImages need FUSE 2 (`fuse2` on Arch, `libfuse2` on Debian/Ubuntu).
+            FOMOD installers need the .NET 9 runtime (`dotnet-runtime-9.0`).
+
+            Unofficial and unsigned; not a Nexus Mods release.
+
       - name: Attach to release
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' && !startsWith(github.ref_name, 'linux-v')
         uses: softprops/action-gh-release@v3.0.3
         with:
           files: dist/vortex-*.AppImage

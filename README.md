@@ -1,4 +1,9 @@
 > [!NOTE]
+> **[⬇ Download Vortex for Linux (AppImage)](https://github.com/GrangerTheDog/Vortex/releases/latest)**:
+> make it executable and run it (`chmod +x vortex-*.AppImage && ./vortex-*.AppImage`).
+> Newer test builds from `master` are in the
+> [Linux nightly](https://github.com/GrangerTheDog/Vortex/releases/tag/linux-nightly) pre-release.
+>
 > **This is a Linux-focused fork of Vortex.** Its changes were made with
 > [Claude](https://claude.com/claude-code), Anthropic's AI coding assistant, to fix
 > the parts of Vortex that only worked on Windows and make it run on Linux. The

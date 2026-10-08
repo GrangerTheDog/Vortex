@@ -37,6 +37,26 @@ Done and checked against the real FO4 install:
   Windows-only `GetDiskFreeSpaceEx`.
 - The .NET check on Linux names the distro package (`dotnet-runtime-9.0`).
 
+- Moving the staging/download folder: `testPathTransfer` resolves volumes without
+  winapi, so it no longer fails with "Unsupported operating system".
+- INI baking: `vortex-parse-ini`'s `WinapiFormat` is patched
+  (`patches/vortex-parse-ini@0.4.0.patch`) to read and write INIs without the
+  Windows API, and ini_prep bakes on Linux. Archive invalidation, mod INI tweaks
+  and FOMOD INI conditions work; verified on FO4 (MCM translations load).
+- Case folding (`util/linux/caseFold.ts`): before deploying on case-sensitive
+  systems, staged files and folders are renamed to the spelling the game folder
+  or an earlier mod uses (`f4se/plugins` → `F4SE/Plugins`). Verified with MCM,
+  F4SE, Address Library, PrismaUI.
+- Fallout 4 file selection: Vortex sets `[Launcher] bEnableFileSelection=1` in
+  Fallout4Prefs.ini when managing plugins. Without it the game loads no mod
+  plugins and rewrites plugins.txt with them disabled (not Linux-specific).
+- Releases: a `linux-v*` tag publishes a full "latest" release with the
+  AppImage; pushes to master refresh the `linux-nightly` pre-release.
+
+Verified end to end on CachyOS: discovery, login, nxm links, mod install,
+hardlink deploy across drives, F4SE 0.7.9 through Proton, MCM, Commonwealth
+Online connecting to a local server.
+
 Checked and fine on Linux already:
 
 - Savegame parsing is pure JS now. The AUR `vortex-linux-fix` package's BA2/BSA
