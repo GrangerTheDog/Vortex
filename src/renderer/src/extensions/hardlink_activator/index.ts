@@ -5,7 +5,6 @@ import { getErrorCode, getErrorMessageOrDefault, unknownToError } from "@vortex/
 import PromiseBB from "bluebird";
 import type { TFunction } from "i18next";
 import turbowalk from "turbowalk";
-import * as winapi from "winapi-bindings";
 
 import { setSettingsPage } from "../../actions/session";
 import { log } from "../../logging";
@@ -14,6 +13,7 @@ import type { IGame } from "../../types/IGame";
 import type { IState } from "../../types/IState";
 import * as fs from "../../util/fs";
 import { installPathForGame } from "../../util/selectors";
+import { volumePathName } from "../../util/volumePath";
 import type { IDiscoveryResult } from "../gamemode_management/types/IDiscoveryResult";
 import { getGame } from "../gamemode_management/util/getGame";
 import LinkingDeployment from "../mod_management/LinkingDeployment";
@@ -117,7 +117,7 @@ class DeploymentMethod extends LinkingDeployment {
           solution: (t) => {
             let displayPath = modPaths[typeId];
             try {
-              displayPath = winapi.GetVolumePathName(modPaths[typeId]);
+              displayPath = volumePathName(modPaths[typeId]);
             } catch {
               log("warn", "Failed to resolve volume path", {
                 path: modPaths[typeId],

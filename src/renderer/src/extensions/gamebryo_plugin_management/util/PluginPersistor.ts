@@ -18,6 +18,7 @@ import {
   pluginPath,
 } from "../util/gameSupport";
 import toPluginId from "../util/toPluginId";
+import { pluginListFile } from "./pluginListFile";
 import { definedAttributes, SpanAttribute } from "./spanAttributes";
 
 export type PluginFormat = "original" | "fallout4";
@@ -481,7 +482,7 @@ class PluginPersistor implements IPersistor {
       .filter((pluginId) => pluginId !== undefined)
       .map((pluginId) => this.mKnownPlugins[pluginId]);
 
-    const pluginsFile = path.join(destPath, "plugins.txt");
+    const pluginsFile = pluginListFile(destPath, "plugins.txt");
     return this.writeFiles(destPath, sorted)
       .then((writtenAt) => {
         this.mFailed = false;
@@ -513,8 +514,8 @@ class PluginPersistor implements IPersistor {
    * Resolves with the time plugins.txt was written.
    */
   private async writeFiles(destPath: string, sorted: string[]): Promise<Date> {
-    const loadOrderFile = path.join(destPath, "loadorder.txt");
-    const pluginsFile = path.join(destPath, "plugins.txt");
+    const loadOrderFile = pluginListFile(destPath, "loadorder.txt");
+    const pluginsFile = pluginListFile(destPath, "plugins.txt");
     // this mkdir should not be necessary
     await mkdir(destPath, { recursive: true });
     await withFileRetry(() =>
@@ -664,7 +665,7 @@ class PluginPersistor implements IPersistor {
 
     let offset = 0;
 
-    const pluginsFile = path.join(this.mPluginPath, "plugins.txt");
+    const pluginsFile = pluginListFile(this.mPluginPath, "plugins.txt");
 
     const newPlugins: IPluginMap = {};
 
@@ -674,7 +675,7 @@ class PluginPersistor implements IPersistor {
     // for newer games, since all plugins are listed, we don't really need the loadorder.txt
     // at all
     if (this.mPluginFormat === "original") {
-      const loadOrderFile = path.join(this.mPluginPath, "loadorder.txt");
+      const loadOrderFile = pluginListFile(this.mPluginPath, "loadorder.txt");
       log("debug", "deserialize", {
         format: this.mPluginFormat,
         pluginsFile,
@@ -781,7 +782,7 @@ class PluginPersistor implements IPersistor {
         if (
           !this.mSerializing &&
           fileName !== null &&
-          ["loadorder.txt", "plugins.txt"].includes(fileName) &&
+          ["loadorder.txt", "plugins.txt"].includes(fileName.toLowerCase()) &&
           this.mPluginPath !== undefined
         ) {
           withFileRetry(() => stat(path.join(this.mPluginPath, fileName)))

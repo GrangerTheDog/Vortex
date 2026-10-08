@@ -1,9 +1,37 @@
 # Linux support: handoff notes (TEMPORARY, delete before merging)
 
-Handoff from a cloud Claude session to a local one. The cloud session could not
-install dependencies (`codeload.github.com` is blocked by its network policy), so
-**nothing here has been built or tested**. No source code has been changed yet;
-this file is the only change on the branch.
+Handoff from a cloud Claude session to a local one, now continued locally on
+CachyOS with a real Steam + Fallout 4 (Proton) install.
+
+## Status (2026-10-08)
+
+Done and checked against the real FO4 install:
+
+- Finding 1 (Proton prefix): `src/renderer/src/util/linux/protonPrefix.ts`
+  (`protonUserFolder`, exported as `util.protonUserFolder`) maps documents and
+  local app data into `compatdata/<appid>/pfx/drive_c/users/steamuser`. The appid
+  comes from the library's `appmanifest_*.acf` files. Wired into plugins.txt/LOOT,
+  ini_prep, FOMOD INI conditions, local-gamesettings, savegames, archive
+  invalidation, test settings and open-directory. Verified: Vortex writes
+  `loadorder.txt` into the prefix and sees the game's own edits.
+- The games create `Plugins.txt` (capital P). Under Wine on a case-sensitive
+  filesystem, a lowercase `plugins.txt` next to it is ignored, so
+  `gamebryo_plugin_management/util/pluginListFile.ts` reuses the existing spelling.
+- Staging folder suggestion: `util/volumePath.ts` replaces the Windows-only
+  `winapi.GetVolumePathName` for the suggestion (auto and the Settings "Suggest"
+  button) and the drive shown by the hardlink/move activators. On Linux it now
+  suggests `<game drive>/Vortex Mods/{game}`, so hardlink deployment can work
+  when the game is on another drive.
+- AppImage: `linux.target` includes `AppImage`; `.github/workflows/package-linux.yml`
+  builds it on ubuntu-22.04. Not yet run locally.
+
+Open:
+
+- Gamebryo BA2/BSA support and savegame management are Windows-only builds
+  upstream. The AUR `vortex-linux-fix` package enables them and builds
+  `GamebryoSave.node` with lz4/zlib. Needed for full FO4 support.
+- Nexus login on Linux: being tested.
+- Findings 2-4 below.
 
 ## Goal and scope (decided by the user)
 
@@ -46,34 +74,34 @@ while the game under Proton uses
 
 Consumers to fix, most important first:
 
-| Consumer | File | Uses |
-|---|---|---|
-| plugins.txt / load order (critical) | `src/renderer/src/extensions/gamebryo_plugin_management/util/gameSupport.ts` (`appDataPath`) | LOCALAPPDATA |
-| INI tweaks | `src/renderer/src/extensions/ini_prep/gameSupport.ts:176`, `ini_prep/index.ts:304` | documents |
-| FOMOD INI conditions | `src/renderer/src/extensions/installer_fomod_shared/utils/gameSupport.ts:10` | documents |
-| profile-local INIs | `extensions/local-gamesettings/src/util/gameSupport.ts` (`mygamesPath`) | documents |
-| save games | `extensions/gamebryo-savegame-management/src/util/gameSupport.ts` | documents |
-| archive invalidation (Fallout4Custom.ini) | `extensions/gamebryo-archive-invalidation/src/util/gameSupport.ts` | documents |
-| test settings | `extensions/gamebryo-test-settings/src/util/gameSupport.ts` | documents |
-| "Open folder" menu | `extensions/open-directory/src/gameSupport.ts` | both |
-| LOOT local data path | check how `gamebryo_plugin_management` passes the local path to loot | LOCALAPPDATA |
+| Consumer                                  | File                                                                                         | Uses         |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- | ------------ |
+| plugins.txt / load order (critical)       | `src/renderer/src/extensions/gamebryo_plugin_management/util/gameSupport.ts` (`appDataPath`) | LOCALAPPDATA |
+| INI tweaks                                | `src/renderer/src/extensions/ini_prep/gameSupport.ts:176`, `ini_prep/index.ts:304`           | documents    |
+| FOMOD INI conditions                      | `src/renderer/src/extensions/installer_fomod_shared/utils/gameSupport.ts:10`                 | documents    |
+| profile-local INIs                        | `extensions/local-gamesettings/src/util/gameSupport.ts` (`mygamesPath`)                      | documents    |
+| save games                                | `extensions/gamebryo-savegame-management/src/util/gameSupport.ts`                            | documents    |
+| archive invalidation (Fallout4Custom.ini) | `extensions/gamebryo-archive-invalidation/src/util/gameSupport.ts`                           | documents    |
+| test settings                             | `extensions/gamebryo-test-settings/src/util/gameSupport.ts`                                  | documents    |
+| "Open folder" menu                        | `extensions/open-directory/src/gameSupport.ts`                                               | both         |
+| LOOT local data path                      | check how `gamebryo_plugin_management` passes the local path to loot                         | LOCALAPPDATA |
 
 Planned design (not written yet):
 
 - New `src/renderer/src/util/linux/protonPrefix.ts` with a **synchronous**
   resolver (the call sites above are synchronous):
   `protonUserFolder(gamePath, steamAppId, folder: "documents" | "localAppData" | "appData"): string | undefined`.
-  - Return `undefined` on non-Linux or when no prefix exists, so callers keep
-    today's behaviour.
-  - Find compatdata from the Steam snapshot entry (`Steam.snapshot()` entries
-    carry `compatDataPath`). Fall back to deriving it from the discovery path:
-    `<lib>/steamapps/common/<dir>` becomes `<lib>/steamapps/compatdata/<appid>`,
-    using `game.details.steamAppId`. (Fallout 4 has `steamAppId: 377160`.) The
-    snapshot may be empty right after startup, before a discovery scan, so the
-    fallback matters.
-  - Folders: `pfx/drive_c/users/steamuser/{Documents, AppData/Local, AppData/Roaming}`.
-  - Check existence with `fs.existsSync` (`steamPaths.ts` already uses
-    synchronous Node fs in the renderer).
+    - Return `undefined` on non-Linux or when no prefix exists, so callers keep
+      today's behaviour.
+    - Find compatdata from the Steam snapshot entry (`Steam.snapshot()` entries
+      carry `compatDataPath`). Fall back to deriving it from the discovery path:
+      `<lib>/steamapps/common/<dir>` becomes `<lib>/steamapps/compatdata/<appid>`,
+      using `game.details.steamAppId`. (Fallout 4 has `steamAppId: 377160`.) The
+      snapshot may be empty right after startup, before a discovery scan, so the
+      fallback matters.
+    - Folders: `pfx/drive_c/users/steamuser/{Documents, AppData/Local, AppData/Roaming}`.
+    - Check existence with `fs.existsSync` (`steamPaths.ts` already uses
+      synchronous Node fs in the renderer).
 - In `gamebryo_plugin_management/util/gameSupport.ts`, `discoveryForGame` is
   already wired at `initGameSupport`. Use it with `gameById(...).details.steamAppId`
   inside `appDataPath`. Note the `process.type === "renderer"` comment there:

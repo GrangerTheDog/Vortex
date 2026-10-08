@@ -130,6 +130,7 @@ import type { TFunction } from "./i18n";
 import { getCurrentLanguage } from "./i18n";
 import lazyRequire from "./lazyRequire";
 import { epicGamesLauncherShim as epicGamesLauncher, steamShim as steam } from "./legacyGameStores";
+import { protonUserFolder } from "./linux/protonPrefix";
 import local from "./local";
 import makeReactive from "./makeReactive";
 import onceCB from "./onceCB";
@@ -277,6 +278,7 @@ export {
   Overlayable,
   pad,
   ProcessCanceled,
+  protonUserFolder,
   ReduxProp,
   relativeTime,
   removeMods,

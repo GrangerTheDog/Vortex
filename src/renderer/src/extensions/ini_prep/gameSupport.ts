@@ -3,6 +3,7 @@ import * as path from "path";
 import format from "string-template";
 
 import getVortexPath from "../../util/getVortexPath";
+import { protonUserFolder } from "../../util/linux/protonPrefix";
 import { makeOverlayableDictionary } from "../../util/util";
 import type { IDiscoveryResult } from "../gamemode_management/types/IDiscoveryResult";
 
@@ -173,7 +174,8 @@ const gameSupport = makeOverlayableDictionary<string, IGameSupport>(
 );
 
 export function iniFiles(gameMode: string, discovery: IDiscoveryResult) {
-  const mygames = path.join(getVortexPath("documents"), "My Games");
+  const documents = protonUserFolder(discovery?.path, "documents") ?? getVortexPath("documents");
+  const mygames = path.join(documents, "My Games");
 
   let store = discovery?.store;
 

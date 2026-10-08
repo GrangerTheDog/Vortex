@@ -8,6 +8,7 @@ import type { IExtensionApi } from "../../../types/IExtensionContext";
 import type { IState } from "../../../types/IState";
 import * as fs from "../../../util/fs";
 import getVortexPath from "../../../util/getVortexPath";
+import { protonUserFolder } from "../../../util/linux/protonPrefix";
 import { makeOverlayableDictionary } from "../../../util/util";
 import { discoveryByGame, gameById } from "../../gamemode_management/selectors";
 import type { IDiscoveryResult } from "../../gamemode_management/types/IDiscoveryResult";
@@ -375,6 +376,12 @@ export function initGameSupport(api: IExtensionApi): Bluebird<void> {
 
 export function appDataPath(gameMode: string): string {
   const dataPath = gameSupport.get(gameMode, "appDataPath");
+
+  // Under Proton the game reads plugins.txt from inside its prefix
+  const protonLocalAppData = protonUserFolder(discoveryForGame(gameMode)?.path, "localAppData");
+  if (protonLocalAppData !== undefined) {
+    return path.join(protonLocalAppData, dataPath);
+  }
 
   return process.env.LOCALAPPDATA !== undefined
     ? path.join(process.env.LOCALAPPDATA, dataPath)

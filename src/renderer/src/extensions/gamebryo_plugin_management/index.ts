@@ -81,6 +81,7 @@ import { handleSetPluginList } from "./util/onSetPluginList";
 import { makePluginConflictPrompt } from "./util/pluginFileConflict";
 import PluginHistory from "./util/PluginHistory";
 import { makeSetPluginLight } from "./util/pluginLight";
+import { pluginListFile } from "./util/pluginListFile";
 import PluginPersistor from "./util/PluginPersistor";
 import { copyIgnoringMissing, swapUserlistForProfile, userlistPaths } from "./util/profileUserlist";
 import { pluginLink, showPluginCallbacks } from "./util/showPlugin";
@@ -268,10 +269,10 @@ function register(
 
   for (const gameId of supportedGames()) {
     context.registerProfileFile(gameId, () =>
-      Bluebird.resolve([path.join(pluginPath(gameId), "plugins.txt")]),
+      Bluebird.resolve([pluginListFile(pluginPath(gameId), "plugins.txt")]),
     );
     context.registerProfileFile(gameId, () =>
-      Bluebird.resolve([path.join(pluginPath(gameId), "loadorder.txt")]),
+      Bluebird.resolve([pluginListFile(pluginPath(gameId), "loadorder.txt")]),
     );
   }
 
@@ -484,7 +485,7 @@ function testPluginsLocked(gameMode: string): Bluebird<ITestResult> {
     return Bluebird.resolve(undefined);
   }
 
-  const filePath = path.join(pluginPath(gameMode), "plugins.txt");
+  const filePath = pluginListFile(pluginPath(gameMode), "plugins.txt");
   return new Bluebird<ITestResult>((resolve, reject) => {
     access(filePath, constants.W_OK, (err) => {
       if (err && err.code === "EPERM") {

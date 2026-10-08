@@ -36,13 +36,16 @@
     "installerHeaderIcon": "nsis/icon.ico"
   },
   "linux": {
-    "target": ["zip"],
+    "target": ["zip", "AppImage"],
     "icon": "../../../assets/images/vortex.png",
     "category": "Network;Development;Game;",
     "synopsis": "Mod Manager",
     "description": "The elegant, powerful, and open-source mod manager from Nexus Mods.",
     "maintainer": "Black Tree Gaming Ltd. <support@nexusmods.com> (https://www.nexusmods.com/)",
     "mimeTypes": ["x-scheme-handler/nxm"]
+  },
+  "appImage": {
+    "artifactName": "vortex-${version}-${arch}.${ext}"
   },
   "extraResources": [
     "./temp/VC_redist.x64.exe",

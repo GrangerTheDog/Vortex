@@ -1,0 +1,121 @@
+name: Package Linux
+
+# Builds an unsigned Linux AppImage. Every push to master and every manual run
+# uploads it as a workflow artifact; pushing a v* tag also attaches it to that
+# tag's GitHub release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version to build (eg: 'v1.0.0'). Leave empty for a nightly version."
+        required: false
+        type: string
+        default: ""
+  push:
+    # TODO: drop the Linux work branch once it's merged
+    branches: [master, claude/determined-gates-klad6l]
+    tags: ["v*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04 # oldest supported glibc, so the AppImage runs on more distros
+    permissions:
+      contents: write # attaching the AppImage to a tag's release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: "recursive"
+
+      - name: Set version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          raw="$INPUT_VERSION"
+          if [ -z "$raw" ] && [ "$REF_TYPE" = "tag" ]; then
+            raw="$REF_NAME"
+          fi
+          if [ -z "$raw" ]; then
+            base=$(node -p "require('./package.json').version")
+            raw="$base-nightly.$(date +%Y%m%d).${{ github.run_number }}"
+          fi
+          echo "raw=${raw#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # NOTE(erri120): fontconfig required by font-scanner required by theme-switcher
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+
+      - name: Install pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      - name: Bump versions
+        run: pnpm -F "@vortex/main" -F "@nexusmods/vortex-api" version ${{ steps.version.outputs.raw }} --no-git-tag-version --no-git-checks --allow-same-version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          VORTEX_ELECTRON_REBUILD: "defer"
+
+      - name: Build workspace
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+
+      - name: Publish dist package
+        run: pnpm nx run @vortex/main:publish
+        env:
+          NODE_ENV: production
+          VORTEX_ELECTRON_REBUILD: "skip"
+
+      - name: Rebuild packaged Electron native modules
+        working-directory: src/main/dist
+        env:
+          # dist is a pnpm deploy artifact: its lockfile carries the workspace catalogs
+          # but the generated workspace file doesn't, so pnpm's pre-run install fails.
+          PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false"
+        run: pnpm exec electron-rebuild
+
+      - name: Build AppImage
+        run: pnpm -F @vortex/main run package:nosign
+
+      - name: Validate package
+        run: |
+          ls -la dist
+          test -n "$(ls dist/vortex-*.AppImage 2>/dev/null)" || { echo "::error::AppImage not found in ./dist/"; exit 1; }
+          node scripts/verify-packaged-asar.mjs --asar dist/linux-unpacked/resources/app.asar
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: vortex-${{ steps.version.outputs.raw }}-linux
+          path: dist/vortex-*.AppImage
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3.0.3
+        with:
+          files: dist/vortex-*.AppImage
+          prerelease: ${{ contains(steps.version.outputs.raw, '-') }}
+          name: ${{ steps.version.outputs.raw }}
+          tag_name: ${{ github.ref_name }}

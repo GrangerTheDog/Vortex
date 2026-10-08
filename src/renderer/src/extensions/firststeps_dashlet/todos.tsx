@@ -7,6 +7,7 @@ import Icon from "../../controls/Icon";
 import Spinner from "../../controls/Spinner";
 import type { IExtensionApi, ToDoType } from "../../types/IExtensionContext";
 import * as selectors from "../../util/selectors";
+import { volumePathName } from "../../util/volumePath";
 import { setProfilesVisible } from "../settings_interface/actions/interface";
 import type { IToDo } from "./IToDo";
 
@@ -93,7 +94,7 @@ function todos(api: IExtensionApi): IToDo[] {
       text: "Downloads are on drive",
       value: (t: TFunction, props: any) => {
         try {
-          return winapi.GetVolumePathName(props.dlPath);
+          return volumePathName(props.dlPath);
         } catch (err) {
           err["dlPath"] = props.dlPath;
           throw err;
@@ -122,7 +123,7 @@ function todos(api: IExtensionApi): IToDo[] {
           if (props.instPath === undefined) {
             return t("<No staging folder>");
           }
-          return winapi.GetVolumePathName(props.instPath);
+          return volumePathName(props.instPath);
         } catch (err) {
           return t("<Invalid Drive>");
         }

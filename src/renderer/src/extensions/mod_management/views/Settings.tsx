@@ -17,7 +17,6 @@ import {
 } from "react-bootstrap";
 import type * as Redux from "redux";
 import type { ThunkDispatch } from "redux-thunk";
-import * as winapi from "winapi-bindings";
 
 import { showDialog } from "../../../actions/notifications";
 import { ComponentEx, connect, translate } from "../../../controls/ComponentEx";
@@ -56,6 +55,7 @@ import * as selectors from "../../../util/selectors";
 import { getSafe } from "../../../util/storeHelper";
 import { cleanFailedTransfer, testPathTransfer, transferPath } from "../../../util/transferPath";
 import { ciEqual, isChildPath, isPathValid, isReservedDirectory } from "../../../util/util";
+import { suggestionRootOnVolume, volumePathName } from "../../../util/volumePath";
 import { currentGame, currentGameDiscovery } from "../../gamemode_management/selectors";
 import type { IDiscoveryResult } from "../../gamemode_management/types/IDiscoveryResult";
 import type { IGameStored } from "../../gamemode_management/types/IGameStored";
@@ -1045,7 +1045,7 @@ class Settings extends ComponentEx<IProps, IComponentState> {
       // stat the volume root rather than the full mod path — the mod directory
       // may not exist yet (e.g. first-time setup), but we only need the device id
       const [modPathStats, userDataStats] = await Promise.all([
-        fs.statAsync(path.parse(modPaths[""]).root),
+        fs.statAsync(volumePathName(modPaths[""])),
         window.api.app.getPath("userData").then((userDataPath) => fs.statAsync(userDataPath)),
       ]);
 
@@ -1053,7 +1053,7 @@ class Settings extends ComponentEx<IProps, IComponentState> {
       if (modPathStats.dev === userDataStats.dev) {
         suggestion = path.join("{USERDATA}", "{game}", "mods");
       } else {
-        const volume = winapi.GetVolumePathName(modPaths[""]);
+        const volume = suggestionRootOnVolume(modPaths[""]);
         suggestion = path.join(volume, suggestInstallPathDirectory, "{game}");
       }
       this.changePath(suggestion);

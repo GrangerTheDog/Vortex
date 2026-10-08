@@ -5,7 +5,6 @@ import { getErrorCode, getErrorMessageOrDefault, unknownToError } from "@vortex/
 import Bluebird from "bluebird";
 import * as fsExtra from "fs-extra";
 import turbowalk from "turbowalk";
-import * as winapi from "winapi-bindings";
 
 import { log } from "@/logging";
 
@@ -25,6 +24,7 @@ import StarterInfo from "../../../util/StarterInfo";
 import { getSafe } from "../../../util/storeHelper";
 import * as storeLookup from "../../../util/storeLookup";
 import { truthy } from "../../../util/util";
+import { suggestionRootOnVolume } from "../../../util/volumePath";
 import { modPathsForGame } from "../../mod_management/selectors";
 import type { IDiscoveryResult } from "../types/IDiscoveryResult";
 import type { IToolStored } from "../types/IToolStored";
@@ -728,12 +728,12 @@ export async function suggestStagingPath(api: IExtensionApi, gameId: string): Pr
 
   let suggestion: string;
 
-  if (statModPath.dev === statUserData.dev || process.platform !== "win32") {
+  if (statModPath.dev === statUserData.dev) {
     // main mod folder is on same drive as userdata, use a subdirectory below that
     suggestion = path.join("{USERDATA}", "{game}", "mods");
   } else {
     // different drives, suggest path on same drive
-    const volume = winapi.GetVolumePathName(modPaths[""]);
+    const volume = suggestionRootOnVolume(modPaths[""]);
     suggestion = path.join(volume, state.settings.mods.suggestInstallPathDirectory, "{game}");
   }
 
