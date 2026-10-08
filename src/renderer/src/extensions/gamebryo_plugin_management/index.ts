@@ -8,6 +8,7 @@ import Bluebird from "bluebird";
 import type I18next from "i18next";
 import type * as Redux from "redux";
 import { createSelector } from "reselect";
+import type { IniFile } from "vortex-parse-ini";
 
 import { log } from "../../logging";
 import ReduxProp from "../../ReduxProp";
@@ -17,7 +18,7 @@ import type {
   IExtensionApi,
   IExtensionContext,
 } from "../../types/IExtensionContext";
-import type { IState } from "../../types/IState";
+import type { IProfile, IState } from "../../types/IState";
 import type { ITestResult, ProblemSeverity } from "../../types/ITestResult";
 import * as fs from "../../util/fs";
 import getVortexPath from "../../util/getVortexPath";
@@ -785,6 +786,29 @@ class PluginInfoCache {
   }
 }
 
+// Games that load no mod plugins, and rewrite plugins.txt with them disabled,
+// unless file selection is switched on in this ini
+const FILE_SELECTION_INI: { [gameId: string]: string } = {
+  fallout4: "fallout4prefs.ini",
+  fallout4vr: "fallout4prefs.ini",
+};
+
+function applyFileSelection(
+  api: IExtensionApi,
+  profile: IProfile,
+  filePath: string,
+  ini: IniFile<any>,
+): Promise<void> {
+  if (
+    FILE_SELECTION_INI[profile.gameId] === path.basename(filePath).toLowerCase() &&
+    pluginManagementEnabled(api.getState(), profile.gameId, profile.id)
+  ) {
+    ini.data.Launcher ??= {};
+    ini.data.Launcher.bEnableFileSelection = 1;
+  }
+  return Promise.resolve();
+}
+
 function testTriggerSort(api: IExtensionApi): Bluebird<ITestResult> {
   return new Bluebird<ITestResult>((resolve, reject) => {
     api.onAsync("did-deploy", async () => {
@@ -1187,6 +1211,12 @@ function init(context: IExtensionContextExt) {
         // folded gamebryo-plugin-indexlock wiring; only attaches listeners, no ordering
         // dependency within this block
         onceIndexLock(context.api, deployWatcher.isDeploying);
+
+        context.api.onAsync(
+          "apply-settings",
+          (profile: IProfile, filePath: string, ini: IniFile<any>) =>
+            applyFileSelection(context.api, profile, filePath, ini),
+        );
 
         context.api.events.on(
           "will-install-dependencies",
