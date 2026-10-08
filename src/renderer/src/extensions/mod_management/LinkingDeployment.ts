@@ -13,6 +13,7 @@ import type { IState } from "../../types/IState";
 import { getGame, UserCanceled } from "../../util/api";
 import * as fs from "../../util/fs";
 import type { Normalize } from "../../util/getNormalizeFunc";
+import { CaseFolder, foldStagedCase } from "../../util/linux/caseFold";
 import { activeGameId } from "../../util/selectors";
 import { truthy } from "../../util/util";
 import type { IDeploymentFailure } from "./actions/session";
@@ -80,6 +81,8 @@ abstract class LinkingActivator implements IDeploymentMethod {
 
   private mApi: IExtensionApi;
   private mNormalize: Normalize;
+  // unifies file and folder case on case-sensitive systems; undefined on Windows
+  private mCaseFolder: CaseFolder | undefined;
 
   private mQueue: Promise<void> = Promise.resolve();
   private mContext: IDeploymentContext;
@@ -134,6 +137,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
     this.mNormalize = normalize;
 
     return queue.then(() => {
+      this.mCaseFolder = process.platform === "win32" ? undefined : new CaseFolder(dataPath);
       this.mContext = {
         newDeployment: {},
         previousDeployment: {},
@@ -351,6 +355,11 @@ abstract class LinkingActivator implements IDeploymentMethod {
       fs
         .statAsync(sourcePath)
         .then(() =>
+          this.mCaseFolder !== undefined
+            ? foldStagedCase(this.mCaseFolder, sourcePath, deployPath)
+            : new Set<string>(),
+        )
+        .then((caseDuplicates) =>
           turbowalk(
             sourcePath,
             (entries) => {
@@ -361,6 +370,9 @@ abstract class LinkingActivator implements IDeploymentMethod {
                 .filter((x) => !x.isDirectory)
                 .forEach((entry) => {
                   const relPath: string = path.relative(sourcePath, entry.filePath);
+                  if (caseDuplicates.has(relPath)) {
+                    return;
+                  }
                   const relPathWithSource = path.join(sourceName, relPath);
                   const relPathWithSourceNorm = this.mNormalize(relPathWithSource);
                   const relPathNorm = this.mNormalize(path.join(deployPath, relPath));
