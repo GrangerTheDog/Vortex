@@ -303,7 +303,7 @@ abstract class LinkingActivator implements IDeploymentMethod {
           const gameRequiresCleanup =
             game.requiresCleanup === undefined ? game.mergeMods !== true : game.requiresCleanup;
           if (removed.length > 0 && (gameRequiresCleanup || cleanupOnDeploy)) {
-            this.postLinkPurge(dataPath, false, false, directoryCleaning).catch((err) => {
+            return this.postLinkPurge(dataPath, false, false, directoryCleaning).catch((err) => {
               if (err instanceof UserCanceled) {
                 return null;
               }
@@ -312,7 +312,8 @@ abstract class LinkingActivator implements IDeploymentMethod {
               });
             });
           }
-
+        })
+        .then(() => {
           this.mContext = undefined;
           context.onComplete();
           return Object.keys(context.previousDeployment).map(
